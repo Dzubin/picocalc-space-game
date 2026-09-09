@@ -1,0 +1,22 @@
+# Build output
+/build/
+*.uf2
+*.elf
+*.bin
+*.hex
+*.map
+*.dis
+
+# ...but do ship the tagged prebuilt binaries in the repo root
+!/picocalc-space-game_V100A_RP2040.uf2
+!/picocalc-space-game_V100A_RP2350.uf2
+
+# Bundled source archives (fetch the Pico SDK / starter separately)
+*.zip
+
+# Editor / OS cruft
+.DS_Store
+Thumbs.db
+
+# Local AI-assistant notes, not for the public repo
+CLAUDE.md

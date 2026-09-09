@@ -1,0 +1,397 @@
+PicoCalc Space Game - game details
+==================================
+Author: Thomas Dzubin
+
+Lifted from the header comment of space_game.c (which now carries only a
+short summary).  Covers startup, the full control map, the status strip, the
+universe model, aliens, the flight model, autopilot, rendering and audio.
+
+Startup
+-------
+Before every game (the first one and every restart after GAME OVER) the
+start screen shows: the big title ("YET ANOTHER SPACE ALIEN GAME (YASAG)",
+by Thomas Dzubin - drawn by big_text(), which blows the 8x10 font up into
+blocks since there is no large font) and, on the lines below it, the four
+difficulty choices.  On the very first showing (program startup) it also plays
+the play_win_song() jingle.  splash_screen() waits for 0..3 and returns it to
+run_game():
+    0  No aliens - just the ship in an empty universe (still has the "Arrow
+       Keys to Move" / "Press Q to Quit" HINTS)
+    1  Easy Aliens (with hints) - 20 aliens; they spawn but never move / spot /
+       hunt (still shootable / rammable); on-screen HINTS help you (see HINTS)
+    2  Regular Aliens - 40 aliens; they drift, then hunt once they see the ship
+    3  Hard Aliens - 60 aliens; mass attack (every alien in the universe charges
+       the ship at once, no line of sight needed), and torpedoes re-fire twice
+       as fast as levels 1-2 (a cloaked ship is still unseen)
+run_game() sets alien_max = ALIEN_MAX_L1/L2/L3 (20/40/60) from the level
+(ALIEN_MAX_INIT 50 for level 0).
+The level shows as "Lv N" in the right strip, above the kill counter, with a
+MM:SS COUNTDOWN clock beside it: it starts at 15:00 (GAME_LEN_S = 900 s, the
+same on every level), ticks DOWN in whole seconds, freezes while the game is
+paused, and at 00:00 the game is over.  Level 0 has no other end condition.
+Then a CONTROLS legend screen shows the key map with a 10 -> 0 countdown
+along the bottom; the game starts at 0, or on any key press.
+
+Controls (raw south-bridge keyboard FIFO - we do NOT call picocalc_init()):
+    LEFT / RIGHT arrow  - rotate the hull in place.  A white attitude jet
+                          flares off the front of the side OPPOSITE the turn
+                          and a hiss plays while held; fuel burns by time
+                          held, not per key press.  Orientation only: turning
+                          never bends the ship's existing travel.
+    UP arrow            - fire the main engine (needs fuel): one velocity
+                          impulse along the nose per DISTINCT key-down
+                          (holding it does nothing - auto-repeat is
+                          ignored), capped at SPEED_MAX.  The big orange
+                          tail flame shows for ~FLAME_HOLD_MS after the
+                          press, then the ship coasts (no drag in vacuum).
+    DOWN arrow          - the MIRROR of UP (needs fuel): one impulse per
+                          distinct key-down along the OPPOSITE of the nose,
+                          at half the strength of an UP push.  Not a brake -
+                          from rest it flies you backwards at half speed.
+                          Two small white flames show off the front.
+    SPACE              - fire a torpedo from the nose (needs ammo), opposite
+                          the flame.  One per press; up to MAX_TORPEDOES on
+                          screen; each flies straight to the box edge and
+                          vanishes.
+    S                  - raise the shield (costs SHIELD_PWR_COST Power, one
+                          off - so it can't go up without that much power):
+                          level jumps to SHIELD_START (100).  The hull turns
+                          cyan + a hex ring is drawn.  The level only falls,
+                          to hits: -SHIELD_HIT_TORPEDO per alien torpedo
+                          blocked, -SHIELD_HIT_RAM per alien ram (the alien
+                          still dies).  At 0 the shield is down and hull
+                          DAMAGE starts to accrue.  A second S drops it
+                          manually (no Power back).  Shown as its own cyan
+                          gauge (4th bar).
+    C                  - toggle the CLOAK (needs power to engage).  On: the
+                          hull vanishes and aliens lose the ship (any that
+                          were hunting keep drifting on their last heading).
+                          While cloaked the ship CANNOT fire or raise the
+                          shield, thrust is capped at the slowest crawl, and
+                          CLOAK_DRAIN power drains every second.  Drops when
+                          Power hits 0.  "CLOAKED" shows in the readout column.
+    ENTER              - "flip and burn" (needs fuel + some speed).  The
+                          ship visibly swings round until the nose faces
+                          RETROGRADE (main engine toward the direction of
+                          travel), then burns the main engine to a stop.
+                          It IS an autopilot: manual keys lock out and the
+                          one AUTOPILOT banner shows "AUTOPILOT" /
+                          "flip-and-burn"; when it finishes the banner
+                          reverts to whatever mode you were in (AUTOPILOT,
+                          or a brief "MANUAL" flash).  Takes long enough that
+                          an alien can hit you mid-flip.
+    ?                  - pause: freeze the game and show the CONTROLS legend
+                          until any key is pressed, then resume.
+    A                  - toggle AUTOPILOT (see below).  A second A leaves
+                          it; so does M (back to MANUAL nav, the default).
+                          Either aborts a hop in progress.
+    (in AUTOPILOT)     - the four ARROW keys each launch a one-box autopilot
+                          "hop" in that screen direction: turn to face it,
+                          fire the engine to AUTO_CRUISE, coast, then
+                          retro-burn to a dead stop exactly AUTO_DIST px
+                          away and snap onto that line.  J / K hand-rotate
+                          the hull CCW / CW between hops.  Manual flight keys
+                          are locked while a hop runs - EXCEPT ENTER, which
+                          still bails you out into a flip-and-burn (handy
+                          when the hop is about to run you into an alien).
+                          The AUTOPILOT banner shows in the box; leaving it
+                          flashes "MANUAL" briefly.
+    ESC                - quit this game and go back to the start screen
+                          (splash + difficulty pick).  Immediate, no prompt.
+    Q                  - quit: freezes the game and asks "Quit?"; Y goes back
+                          to the start screen (like Esc), any other key cancels.
+                          It does NOT reboot - only ~ does that.
+    ~                  - reboot into BOOTSEL (USB mass-storage) mode.
+                          ~ is Shift + backtick; needing the two-key combo
+                          keeps a stray backtick from dropping to BOOTSEL.
+                          NOT shown on the in-game CONTROLS legend.
+
+Status strip (the gauges + readouts)
+-----------------------------------
+FIVE short bars stacked FLUSH (no gap) in the strip below the box - Fuel,
+Power, Ammo, Shield, Damage - each a coloured bar (for the graph readers)
+plus a text readout beside it (for the text readers).  Fuel / Power / Shield
+/ Damage read as a bare "0..100%" (the Damage bar FILLS as you take hits);
+Ammo keeps its "cur/max" count.  The Lv / Kills / CLOAKED readouts sit in a
+column to the right of those (at level 0, "No Aliens" replaces the kill
+count).  No speed bar.
+    Fuel  - starts FUEL_MAX, spent manoeuvring: FUEL_COST_FWD per distinct
+            UP key-down, FUEL_COST_REV per distinct DOWN key-down (auto-
+            repeat is ignored for both), and -1 per FUEL_ROT_FRAMES frames
+            spent actually turning with LEFT / RIGHT (charged by time held,
+            not per key event, so it doesn't depend on the keyboard's
+            repeat rate; the flip-and-burn flip pays the same way).  At
+            0 EVERYTHING stops - no forward/reverse thrust, no turning; you
+            just coast on whatever velocity you had.
+    Power - starts POWER_MAX.  Raising the shield spends SHIELD_PWR_COST;
+            the cloak drains CLOAK_DRAIN per second.  No recharge.  Below
+            SHIELD_PWR_COST the shield can't go up again, and at 0 the game
+            is over (life support needs power).
+    Ammo  - starts AMMO_MAX, minus one per torpedo that actually launches.
+            At 0, SPACE does nothing.
+    Shield - the 0..100 shield level (see the S key).
+    Damage - the 0..100 hull-damage metric (see below); its bar fills red.
+Fuel / power / ammo floor at 0 and never refill.
+
+Beside those, in the same column: "Lv N" (top line), "Kills NN/MM" (or
+"No Aliens" at level 0), then "CLOAKED" while cloaked.
+
+When SHOW_STATUS is 0 (small panels: no status strip) there are NO gauges.
+Instead, low-resource warnings appear down the RIGHT edge of the box, over
+the starfield: "FUEL"/"PWR"/"AMMO"/"SHLD" turn YELLOW under 20% and RED
+under 10% (SHLD only warns while the shield is actually up); "HULL" turns
+YELLOW over 70% damage and RED over 85%.
+
+Hull DAMAGE
+-----------
+A 0..100 metric separate from the shield, starting at 0.  It only rises
+while the shield is DOWN: +SHIP_DMG_TORPEDO (10) per alien torpedo through the
+hull, +SHIP_DMG_RAM (40) per ram (the alien is wrecked in the crash too).
+The crew mends DMG_REPAIR_STEP (1) every DMG_REPAIR_MS (2 s).  At >= DMG_MAX
+(100) the rocket is destroyed.  Power reaching 0 also ends the game.
+
+Universe
+--------
+The whole game lives on one fixed pixel grid, UNIVERSE_SIZE on a side
+(10,000 px; int32_t coords - the type could hold ~1e9).  The ship never leaves
+the box centre on screen; what moves is its univ_x / univ_y, stepped by
+the velocity vector every frame (a float carry keeps the sub-pixel part).
+It starts at the exact middle.  The grid wraps.  The live X,Y show near the
+bottom-right of the screen.
+
+Enemy aliens
+------------
+Squares (~ the ship's size) on the universal grid, red normally.  A fresh
+one spawns ALIEN_SPAWN_MIN..alien_spawn_max px from the ship on its OWN random
+heading and just drifts.  The frame its square first touches the play box ("it
+can see us") it stops for SPOT_PAUSE frames, then charges straight at the ship
+for good, at its own alien_t.speed (each alien copies the alien_speed default -
+the rocket's crawl - at spawn).  A drifter that is never seen and wanders past
+ALIEN_CULL_DIST is quietly recycled.  ALIEN_ONSCREEN exist at once; refilled as
+they leave until alien_max have been used up.  On screen an alien sits at
+box_centre + (its univ pos - the ship's), clipped to the box like everything
+else.
+
+alien_max / alien_speed / alien_spawn_max are runtime variables in
+space_game.c, meant to be set per chosen difficulty, and so is the bool
+alien_ram_and_fire (default false; see the shooter section).  Individual
+aliens can also be given a non-default alien_t.speed.
+
+Each alien carries its own 0..100 internal damage.  A player torpedo does
+ALIEN_HIT_DMG (60), so it takes TWO hits to reach ALIEN_DMG_MAX (100) and be
+destroyed.  Above ALIEN_WOUND_ON (50%) it turns YELLOW ("wounded"); it turns
+back RED only once the crew's repair (DMG_REPAIR_STEP every DMG_REPAIR_MS, same
+as the hull) brings it below ALIEN_WOUND_OFF (39%) - so at <39% it can safely
+eat one more hit (39 + 60 = 99).
+
+Shooters: every ALIEN_SHOOTER_EVERY-th created alien (25%) spawns with
+ALIEN_TORPEDOES torpedoes.  While torpedoes > 0 it is FROZEN in place - never
+drifts, spots, hunts or wanders (aliens_update() clears `hunting` and bails
+before any movement).  All it does is fire, and aliens_fire() only fires while
+its square is on the play box with the ship.  (The alien_ram_and_fire flag -
+default false, a future high-difficulty knob - removes that freeze, letting a
+loaded shooter move / hunt / ram AND keep shooting.)  It can't fire for the first
+ALIEN_ARM_MS (2 s) after its square first comes on the box - "loading up" - and
+then no more than one shot per re-fire gap: ALIEN_FIRE_MS on level 3, doubled
+(2 x, so half the rate) on levels 1-2.
+Each shot is a WHITE tracer (ATORPEDO_SPEED, red was too faint on the LCD)
+aimed - freshly, every shot - at the ship's universe position at that
+instant.  A torpedo's heading is then fixed for its whole life; it never
+curves, so nudging the ship forward/back after a shot slips it.
+
+The moment a shooter's clip is EMPTY (torpedoes == 0, shots > 0) it is free to
+move: it stops holding position and charges the ship to RAM it - at ANY
+difficulty, level 1 included (aliens_update() forces hunting for it and lets it
+past the level-1 "never move" gate).  A ram wrecks the alien and, shield down,
+adds SHIP_DMG_RAM to the hull.  (Reloading it via the idle nudge puts torpedoes
+back > 0, so it freezes and shoots again - only once empty can it charge again.)
+
+A "rookie" shooter is a bad shot that improves: shot 1 aims ALIEN_ROOKIE_MISS
+(20) px below the ship, the miss shrinking linearly to 0 by shot
+ALIEN_ROOKIE_SHOTS (5) - dead on from then on.  The ramp counts the alien's own
+`shots` field, so it is unaffected by clip size or a reload.  Between the
+tightening aim, the perfect late shots and the closing ram, a rookie left alone
+grinds the hull down toward GAME OVER.
+
+Levels 1-3 seed one rookie on the right box edge at the start
+(alien_spawn_rookie()).  Then every IDLE_ROOKIE_MS (30 s) with no key event
+run_game() intervenes: if |v| >= FNB_MIN_SPEED it first kicks off a
+flip-and-burn (fnb_state = FNB_FLIP) and leaves the timer alone, so the block
+re-fires once the ship is stopped; stopped, it either RELOADS the live rookie
+(torpedoes += ALIEN_TORPEDOES so it keeps shooting instead of ramming;
+next_fire_ms = now; `shots` carries over so the aim ramp does too) or, if none
+is alive, calls alien_spawn_rookie().  Only one rookie ever exists:
+alien_spawn_rookie() no-ops if a `rookie` alien is alive, and since
+aliens_respawn() keeps all ALIEN_ONSCREEN slots full it recycles a slot (a
+non-shooter, preferring one that hasn't locked on) rather than needing a free
+one.  aliens_update() removes a `rookie` outright (no flash, no score) the
+moment its square leaves the box - e.g. the ship drove out from under it.
+Contact:
+    player torpedo hits an alien       -> +ALIEN_HIT_DMG to its damage; at
+                                         >= ALIEN_DMG_MAX it flashes + is
+                                         removed, else it is left wounded
+    alien hits an alien               -> both flash, then both removed
+    alien torpedo hits the ship, shield UP   -> shield -SHIELD_HIT_TORPEDO
+    alien torpedo hits the ship, shield DOWN -> hull damage +SHIP_DMG_TORPEDO
+    alien rams the ship (alien always dies), shield UP   -> shield -SHIELD_HIT_RAM
+    alien rams the ship (alien always dies), shield DOWN -> hull damage +SHIP_DMG_RAM
+Hull damage >= DMG_MAX, power at 0, or the countdown clock hitting 00:00
+(GAME_LEN_S of play, all levels), ends the game.
+The "Kills NN/MM" counter shows removed / alien_max -
+every removal counts, however it died.  After the rocket is gone the screen
+shows "GAME OVER" + "press any key to restart" (both centred in the current
+BOX_W x BOX_H play box); any key (bar ~, which still reboots to BOOTSEL) goes
+back to the start screen.
+
+WIN: on any level with aliens (score >= alien_max, i.e. all alien_max killed)
+run_game() clears the screen to a big-text "YOU WON IN" + the time TAKEN as
+MM:SS (elapsed play time, counted up from 00:00, capped at GAME_LEN_S), calls
+play_win_song() (a blocking ~WIN_SONG_MS victory jingle), shows "Press any key
+to continue", then returns to splash_screen().
+
+Fresh aliens never spawn
+inside the visible screen (ALIEN_SPAWN_MIN clears the box) - the one
+exception is a single "here is your target" alien that levels 1-3 seed at
+the right edge of the box (ALIEN_INTRO_X) at a random height off centre
+(ALIEN_INTRO_YMIN..MAX, either way) so the player sees one from frame one
+but cannot just autopilot straight into it.
+
+Player torpedoes travel in box coordinates at TORPEDO_SPEED (deliberately above
+SPEED_MAX so the ship can't overtake its own fire).  Alien torpedoes travel on
+the universe grid at ATORPEDO_SPEED (slower, and dodgeable): fixed heading,
+fixed grid track, so if the ship moves off the spot it was aimed at the shot
+sails past.  Neither kind is carried by the starfield scroll.
+
+Model
+-----
+The ship never leaves the centre of the box; only its heading changes.  It
+carries a velocity VECTOR with real inertia and no drag - in vacuum it just
+coasts.
+
+UP adds a THRUST_IMPULSE-long vector along the current nose direction to the
+velocity (true vector addition): thrust one way, turn, thrust again and the
+new course is the sum of the pushes, its length the resulting speed, capped
+at SPEED_MAX.
+
+DOWN is the exact mirror: it adds BRAKE_IMPULSE (half a THRUST_IMPULSE)
+along the OPPOSITE of the nose.  It is NOT a brake - from a standstill it
+drives the ship backwards at half the up-thrust rate.
+
+Nothing is a dedicated "slow down".  Heading (nose) and trajectory (the way
+you actually drift - the starfield scrolls the opposite way) are separate.
+To bleed off speed you aim a push against your drift: point the nose the way
+you are drifting and tap DOWN, OR point it retrograde and tap UP.
+
+Because thrust is not continuous, LEFT / RIGHT turn the hull WITHOUT turning
+the existing travel.  The starfield scrolls opposite the velocity vector, so
+it keeps drifting - ship pointing wherever it likes - until you slow it.
+
+Autopilot
+---------
+A toggles it; M also leaves it (back to MANUAL navigation, the default when
+autopilot is off - leaving flashes "MANUAL" for MANUAL_TXT_MS).  One "hop"
+covers AUTO_DIST px - a play-box - of travel; the universe itself is
+continuous, this is just a fixed step size.  In autopilot each ARROW
+launches a hop: a strict state march AUTO_TURN -> AUTO_MOVE -> AUTO_BRAKE.
+TURN rotates the hull to that screen cardinal (its side attitude jet shows)
+and zeroes the velocity; MOVE fires the MAIN engine to AUTO_CRUISE (= two UP
+pulses) then coasts; BRAKE fires the FRONT engine only, retro-pulsing to a
+dead stop and snapping univ_x/univ_y exactly onto AUTO_DIST.  Once BRAKE
+starts the main engine never lights again.  Manual flight keys are
+locked while a hop runs (the `manual` gate) - except ENTER, which cancels
+the hop and starts a flip-and-burn (the bail-out when the course is headed
+into an alien).  J / K hand-rotate the hull between hops (they drive the
+same k_left / k_right as a normal LEFT / RIGHT); the banner's second line
+reminds you ("press J,K keys to rotate ship") whenever autopilot is on and
+idle (it reads "engaged" during a hop, "flip-and-burn" during that).  Runs
+out of fuel -> the hop aborts and the ship coasts.
+
+Every star has a depth d in [DEPTH_MIN, 1].  Its scroll step is d * speed,
+so near stars (d ~ 1) sweep past fast and far stars (d small) barely move -
+that spread is the parallax cue.  Depth also sets brightness (near = white,
+far = dim blue-grey).  Once a star's per-frame step is long enough it is
+drawn as a streak (a short line back along its travel) instead of a dot,
+which is what sells speed at a high cruise.  A star leaving one edge wraps
+to the opposite edge with a fresh random position AND a fresh depth, so the
+field never visibly repeats.
+
+Rendering
+---------
+No RAM framebuffer: we draw straight into the ST7789P frame memory with
+lcd_solid_rectangle().  Each star stores the exact segment it last drew and
+erases that (background colour) before drawing its new dot / streak.  The
+ship (tri_fill) and the alien squares (px_rect) are SOLID - drawn and
+erased as filled shapes; the flames stay wireframe (tri_outline).  The hull
+is COL_SHIP white, COL_SHIP_WOUND yellow once damage > SHIP_WOUND_ON (33) OR
+power < SHIP_WOUND_ON percent, or COL_SHIELD cyan while the shield is up (cyan
+wins); COL_SHIP_FLASH on the death flash.
+px_rect() clips every in-box write to the interior so nothing can touch the
+border or the area outside the box.  The status gauges are the exception - they
+sit in that outside area on purpose and write there with raw
+lcd_solid_rectangle() / lcd_putstr(), repainting only when their value
+changes.
+
+For ~FLAME_HOLD_MS after each UP press a big orange "flame" triangle hangs
+off the tail, pointing straight back, its length + colour re-flickering
+every frame.  For ~BRAKE_HOLD_MS after each DOWN press two small white
+flames show off the front sides instead.  While LEFT / RIGHT is turning the
+hull a small white attitude jet (rcs_verts) flares off ONE front side - the
+side opposite the turn, so its thrust yaws the nose the way you asked.
+Order per frame: erase old ship body + old flames/jet -> move/redraw stars
+-> draw flames/jet -> draw the alien squares -> draw the ship body on top
+(so it covers any star that ran under it, and the flames appear to come out
+from under it).
+
+Long Range Sensors: when an alien is off the visible box but its screen X
+or Y still falls inside a box edge (i.e. it is straight up / down / left /
+right of the box, not diagonally away), a small red triangular blip is
+drawn just inside that edge pointing at it.  On-screen aliens and purely
+diagonal ones get no blip.
+
+HINTS (DIFFICULTY 0 AND 1 - the two "with hints" levels): grey (COL_HINT)
+big-text captions along the bottom of the box, each armed for HINT_MS (2 s).
+The hint block runs for level <= 1; the alien survey and the level-1 hints are
+gated inside it.  Only one caption uses the row at a time; priority is
+move > next-alien > shields > fire > quit.
+  - "Arrow Keys to Move": levels 0 AND 1, shown once as the game starts.
+  - "Press Q to Quit": level 0 ONLY, shown at the 1-minute and 2-minute marks
+    (HINT_Q_AT_1_MS / HINT_Q_AT_2_MS).
+  - "Next Alien This Way" (level 1): the play box holds NO alien but some are
+    still alive.  Also a grey isosceles triangle centred on the box - apex
+    HINT_ARROW_TIP px toward the nearest off-box alien, base HINT_ARROW_BACK the
+    other way, 2*HINT_ARROW_HALF wide - redrawn / erased each frame so it tracks
+    the ship.  Re-armed whenever the box is cleared again, and whenever a
+    flip-and-burn ENDS with the box still empty.
+  - "Use S for Shields" (level 1): armed the frame the hull first becomes
+    "wounded" (damage > SHIP_WOUND_ON, or power < that percent) with no shield
+    up; re-armed once that clears.
+  - "SPACE key to fire" (level 1): shown ONCE, HINT_FIRE_AFTER_MS (30 s) into
+    the game, if no torpedo has been fired yet (ammo still == AMMO_MAX).  Does
+    not re-arm.
+
+Audio
+-----
+The starter audio driver is a single square-wave voice per channel with a
+100..2115 Hz range and no volume control.  Four short sounds, in priority
+order (highest wins the voice):
+  - "alien destroyed" chime: a rising 3-note major arpeggio
+    (CHIME_N1 -> N2 -> N3, split evenly over CHIME_MS ~220 ms), armed the frame
+    a player torpedo takes an alien's damage to ALIEN_DMG_MAX.  Beats all;
+  - player "pew": a fast pitch DROP PEW_HI -> PEW_LO over PEW_MS (~110 ms);
+  - alien "pew": the same chirp REVERSED, PEW_LO -> PEW_HI;
+  - thruster "hiss": per-frame random high pitch (HISS_LO..HISS_HI, an
+    independent value for L and R) - fake white noise on a square voice -
+    while UP / DOWN or a turn is firing a jet and for ~HISS_MS after.
+The voice is silent the rest of the time.
+
+play_win_song() is separate: a blocking ~WIN_SONG_MS happy jingle (a static
+{Hz, ms} note list; Hz 0 == a rest) walked with sleep_ms().  Played on the
+"YOU WON IN" screen before the "press any key" prompt, and once at program
+startup on the first splash_screen() (guarded by a static flag).  It drives the
+PIO with raw audio_play_sound() rather than the sound_set() latch, so it must
+end by calling audio_stop() and zeroing snd_l / snd_r directly - a plain
+sound_silence() there no-ops against the stale latch and leaves the last note
+ringing until the next sound.
+
+Only lcd, southbridge, font-8x10 and audio from picocalc-text-starter (by
+Blair Leduc) are used.
