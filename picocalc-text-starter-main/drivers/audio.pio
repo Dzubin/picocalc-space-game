@@ -36,8 +36,8 @@ static inline void audio_pwm_program_init(PIO pio, uint sm, uint offset, uint pi
 
 static inline bool audio_pwm_is_not_silence(uint16_t frequency) {
     // Check if the frequency is zero or silence
-    // Upper bound raised 2000 -> 2115 Hz for picocalc-music-maker so the
-    // top C (C7, ~2093 Hz) can sound in every tuning.
+    // Upper bound raised 2000 -> 2115 Hz so the hiss band and the top C (C7,
+    // ~2093 Hz) can sound.
     return (frequency >= 100 && frequency <= 2115);
 }
 

@@ -559,7 +559,7 @@ comment).
 | `CMakeLists.txt`            | Firmware build config - lists the starter driver `.c` files it compiles; copies the `.uf2` to the top level as `picocalc-space-game-RP2040.uf2` / `-RP2350.uf2`. |
 | `desktop/`                  | Desktop (SDL2) build for Windows and Linux: its own `CMakeLists.txt` plus a small shim (`shim_*.c`, `pico/`, `hardware/`) that re-implements the starter driver API on SDL2, and `shim_screenshot.c`, the Windows stand-in for `F5`. Output `picocalc-space-game-Windows.exe`. |
 | `pico_sdk_import.cmake`     | Standard Pico SDK bootstrap.                        |
-| `picocalc-text-starter-main/` | Vendored copy of picocalc-text-starter (Blair Leduc). Read-only; only `drivers/lcd.c`, `drivers/southbridge.c`, `drivers/font-8x10.c` and `drivers/audio.c` (+ `audio.pio`) are built - plus `drivers/sdcard.c` / `drivers/fat32.c`, used only by the PicoCalc `F5` screenshot. |
+| `picocalc-text-starter-main/` | Vendored copy of picocalc-text-starter (Blair Leduc). Read-only; only `drivers/lcd.c`, `drivers/southbridge.c`, `drivers/font-8x10.c` and `drivers/audio.c` (+ `audio.pio`) are built - plus `drivers/sdcard.c` / `drivers/fat32.c`, used only by the PicoCalc `F5` screenshot. Two small local changes are in it: `drivers/fat32.c` (`get_next_free_cluster()` now advances its search hint, so a long sequential SD write does not look hung) and one line in `drivers/audio.pio` (upper tone limit raised from 2000 Hz to 2115 Hz). |
 | `CHANGELOG.md`              | Notable changes.                                    |
 
 ## Tuning
