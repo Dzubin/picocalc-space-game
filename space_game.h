@@ -18,7 +18,7 @@
 /* Shown on the splash screen ("<VERSION_STR>  by Thomas Dzubin").  Keep in
  * sync with pico_set_program_version(...) in CMakeLists.txt and the top
  * heading in CHANGELOG.md. */
-#define VERSION_STR  "V1.00A"
+#define VERSION_STR  "V1.00B"
 
 /* --- Target hardware ------------------------------------------------------ *
  *  PICOCALC defined  =  a stock ClockworkPi PicoCalc: ST7789P/ST7365P LCD on

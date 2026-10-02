@@ -17,7 +17,7 @@ counter, and a title + **four-level difficulty pick** on startup.
 
 **Before every game** - the first one and every restart after `GAME OVER` - one
 **start screen** shows the big blocky title (*YET ANOTHER SPACE ALIEN GAME
-(YASAG)*, then a `V1.00A  by Thomas Dzubin` line - there's no large font, so the
+(YASAG)*, then a `V1.00B  by Thomas Dzubin` line - there's no large font, so the
 8x10 one is just drawn scaled up) with the difficulty choice on the lines below
 it. The very first showing (program startup) plays a short happy jingle. Press a
 number to pick and go:

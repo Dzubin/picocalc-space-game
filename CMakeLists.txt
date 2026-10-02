@@ -52,7 +52,7 @@ add_executable(picocalc-space-game
 )
 
 pico_set_program_name(picocalc-space-game "picocalc-space-game")
-pico_set_program_version(picocalc-space-game "V1.00A")   # keep in sync with VERSION_STR in space_game.h
+pico_set_program_version(picocalc-space-game "V1.00B")   # keep in sync with VERSION_STR in space_game.h
 
 # Build the audio PIO program (generates audio.pio.h that drivers/audio.c needs)
 pico_generate_pio_header(picocalc-space-game ${STARTER}/drivers/audio.pio)

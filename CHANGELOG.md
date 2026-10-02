@@ -7,6 +7,8 @@ and the string shown on the splash screen (`VERSION_STR` in `space_game.h`).
 
 ## [Unreleased]
 
+## [V1.00B] - 2026-10-02
+
 ### Added
 - Build outputs are named without the `picocalc-` prefix, since the chip or system
   at the end of the name already says what they are for: `space-game-RP2040.uf2`, `space-game-RP2350.uf2`, `space-game-Windows.exe` and `space-game-Linux`.
