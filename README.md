@@ -411,11 +411,12 @@ Tune the pew with `PEW_HI` / `PEW_LO` / `PEW_MS`, the hiss with `HISS_LO` /
 `HISS_HI` / `HISS_MS`, and the kill chime with `CHIME_N1` / `CHIME_N2` /
 `CHIME_N3` / `CHIME_MS`, all in `space_game.h`.
 
-## Screenshots (PicoCalc hardware only)
+## Screenshots (PicoCalc hardware, and the Windows build)
 
-**This feature is for the ClockworkPi PicoCalc and nothing else.** It depends on
-the PicoCalc's exact LCD panel and its SD-card slot; on any other board it is
-compiled out and does nothing.
+**On real hardware this feature is for the ClockworkPi PicoCalc and nothing
+else.** It depends on the PicoCalc's exact LCD panel and its SD-card slot; on
+any other board it is compiled out and does nothing. The Windows build has its
+own version: `F5` writes the same kind of `SHOTxxxx.BMP` to the current folder.
 
 On a PicoCalc, press **`F5`** and the current screen is saved to the SD card as
 a randomly-named 24-bit BMP - `SHOT` followed by four hex digits, e.g.
@@ -472,9 +473,40 @@ Run), or from a terminal with `PICO_SDK_PATH` set:
     cmake -B build -G Ninja
     ninja -C build
 
-Output: `build/picocalc-space-game.uf2`. Flash it by copying to the `RPI-RP2`
-drive - hold BOOTSEL on power-up, or press `~` in the app to drop back to
-BOOTSEL without touching the board.
+Output: `build/picocalc-space-game-<chip>.uf2` (`<chip>` is `RP2350` or `RP2040`, matching the board), which the build also copies to the
+top-level folder as `picocalc-space-game-RP2350.uf2` or
+`picocalc-space-game-RP2040.uf2` (depending on the board), so both chips'
+builds can sit side by side. Flash it by copying to the `RPI-RP2` drive - hold
+BOOTSEL on power-up, or press `~` in the app to drop back to BOOTSEL without
+touching the board.
+
+### On Windows
+
+The same game also runs on a Windows PC through a small SDL2 layer in
+[`desktop/`](desktop/) that stands in for the PicoCalc's LCD, keyboard and
+audio drivers. From an MSYS2 UCRT64 shell with SDL2 installed:
+
+    cmake -S desktop -B build-windows -G Ninja
+    ninja -C build-windows
+
+Output: `picocalc-space-game-Windows.exe` in the top-level folder. SDL2 is
+linked statically, so it is a single file with no `SDL2.dll`. `~` closes the
+program, and `F5` saves the screen as `SHOTxxxx.BMP` in the current folder
+instead of on an SD card.
+
+### Linux
+
+The same source builds on Linux with the SDL2 development package installed
+(for example `sudo apt install libsdl2-dev`). Unlike the Windows build, SDL2 is
+**not** linked in statically: the program links `libSDL2` dynamically, and the
+build copies that library next to the executable as `libSDL2-2.0.so.0`, where
+the executable finds it through an `$ORIGIN` run-path. Keep the two files
+together.
+
+    cmake -S desktop -B build-linux
+    cmake --build build-linux
+
+Output: `picocalc-space-game-Linux` and `libSDL2-2.0.so.0` in the top-level folder.
 
 The board is **not** pinned in `CMakeLists.txt` (the `set(PICO_BOARD ...)` line
 is left commented out). Pick the target with the VS Code Pico extension's
@@ -524,7 +556,8 @@ comment).
 | `space_game.c`              | **All the game code, and only code.** `#include "space_game.h"`, then `main()` and `run_game()` (the whole playthrough) right at the top, then the helpers - no prototype block, since every declaration is in the header. A short summary comment sits at the very top; the full design write-up is in `GAME-DETAILS.txt`. |
 | `GAME-DETAILS.txt`          | The long-form design reference - startup, the full control map, status, universe model, aliens, flight model, autopilot, rendering, audio. Prose only; nothing includes it. |
 | `space_game_screenshot.c` / `.h` | **Optional, PicoCalc hardware only.** The `F5` screenshot - reads the LCD back over SPI and streams it to a BMP on the SD card. Entirely behind `#ifdef PICOCALC`; delete both files (and `#undef PICOCALC`) to build for any other board. |
-| `CMakeLists.txt`            | Build config - lists the starter driver `.c` files it compiles. |
+| `CMakeLists.txt`            | Firmware build config - lists the starter driver `.c` files it compiles; copies the `.uf2` to the top level as `picocalc-space-game-RP2040.uf2` / `-RP2350.uf2`. |
+| `desktop/`                  | Desktop (SDL2) build for Windows and Linux: its own `CMakeLists.txt` plus a small shim (`shim_*.c`, `pico/`, `hardware/`) that re-implements the starter driver API on SDL2, and `shim_screenshot.c`, the Windows stand-in for `F5`. Output `picocalc-space-game-Windows.exe`. |
 | `pico_sdk_import.cmake`     | Standard Pico SDK bootstrap.                        |
 | `picocalc-text-starter-main/` | Vendored copy of picocalc-text-starter (Blair Leduc). Read-only; only `drivers/lcd.c`, `drivers/southbridge.c`, `drivers/font-8x10.c` and `drivers/audio.c` (+ `audio.pio`) are built - plus `drivers/sdcard.c` / `drivers/fat32.c`, used only by the PicoCalc `F5` screenshot. |
 | `CHANGELOG.md`              | Notable changes.                                    |
