@@ -35,7 +35,10 @@ Then a **`CONTROLS`** screen lists the key map with a **10-second countdown**
 along the bottom. The game starts when the countdown hits `0`, or the moment
 you press any key - except **`ESC`**, which goes back to the start screen.
 
-`~` reboots to BOOTSEL (for reflashing) from anywhere.
+`~` reboots to BOOTSEL (for reflashing) from anywhere. On the **start screen**,
+`ESC` or `Q` leaves the program for the PicoCalc **UF2 Loader** menu (it asks the
+loader for its menu through the watchdog scratch registers; with no loader
+installed the program just restarts, and on a PC it closes).
 
 ## What you see
 
@@ -456,6 +459,7 @@ comment in `space_game_screenshot.h` for the full recipe.
 | Q              | Quit - freezes the game and asks `Quit?`. Press `Y` to go back to the start screen (same as `Esc`, just with a confirm), any other key to cancel. Does **not** reboot |
 | F5             | **PicoCalc only.** Save a screenshot of the screen to the SD card as a randomly-named 24-bit `SHOTxxxx.BMP` (needs a card inserted). Flashes the result for ~2 s and keeps playing. Compiled out on non-PicoCalc builds; not shown on the in-game `CONTROLS` legend |
 | 0 / 1 / 2 / 3  | On the start screen - pick that difficulty and go |
+| Esc / Q        | On the start screen - leave for the PicoCalc UF2 Loader menu |
 | Any key        | `CONTROLS` screen - start the game now (skip the countdown). `GAME OVER` screen - back to the start screen |
 | `~`            | Reboot into BOOTSEL (USB drive) mode for reflashing, from anywhere. `~` is Shift + backtick - the two-key combo is deliberate so a stray backtick can't drop you into BOOTSEL. Not shown on the in-game `CONTROLS` legend |
 
@@ -473,9 +477,9 @@ Run), or from a terminal with `PICO_SDK_PATH` set:
     cmake -B build -G Ninja
     ninja -C build
 
-Output: `build/picocalc-space-game-<chip>.uf2` (`<chip>` is `RP2350` or `RP2040`, matching the board), which the build also copies to the
-top-level folder as `picocalc-space-game-RP2350.uf2` or
-`picocalc-space-game-RP2040.uf2` (depending on the board), so both chips'
+Output: `build/space-game-<chip>.uf2` (`<chip>` is `RP2350` or `RP2040`, matching the board), which the build also copies to the
+top-level folder as `space-game-RP2350.uf2` or
+`space-game-RP2040.uf2` (depending on the board), so both chips'
 builds can sit side by side. Flash it by copying to the `RPI-RP2` drive - hold
 BOOTSEL on power-up, or press `~` in the app to drop back to BOOTSEL without
 touching the board.
@@ -489,7 +493,7 @@ audio drivers. From an MSYS2 UCRT64 shell with SDL2 installed:
     cmake -S desktop -B build-windows -G Ninja
     ninja -C build-windows
 
-Output: `picocalc-space-game-Windows.exe` in the top-level folder. SDL2 is
+Output: `space-game-Windows.exe` in the top-level folder. SDL2 is
 linked statically, so it is a single file with no `SDL2.dll`. `~` closes the
 program, and `F5` saves the screen as `SHOTxxxx.BMP` in the current folder
 instead of on an SD card.
@@ -506,7 +510,7 @@ together.
     cmake -S desktop -B build-linux
     cmake --build build-linux
 
-Output: `picocalc-space-game-Linux` and `libSDL2-2.0.so.0` in the top-level folder.
+Output: `space-game-Linux` and `libSDL2-2.0.so.0` in the top-level folder.
 
 The board is **not** pinned in `CMakeLists.txt` (the `set(PICO_BOARD ...)` line
 is left commented out). Pick the target with the VS Code Pico extension's
@@ -556,8 +560,8 @@ comment).
 | `space_game.c`              | **All the game code, and only code.** `#include "space_game.h"`, then `main()` and `run_game()` (the whole playthrough) right at the top, then the helpers - no prototype block, since every declaration is in the header. A short summary comment sits at the very top; the full design write-up is in `GAME-DETAILS.txt`. |
 | `GAME-DETAILS.txt`          | The long-form design reference - startup, the full control map, status, universe model, aliens, flight model, autopilot, rendering, audio. Prose only; nothing includes it. |
 | `space_game_screenshot.c` / `.h` | **Optional, PicoCalc hardware only.** The `F5` screenshot - reads the LCD back over SPI and streams it to a BMP on the SD card. Entirely behind `#ifdef PICOCALC`; delete both files (and `#undef PICOCALC`) to build for any other board. |
-| `CMakeLists.txt`            | Firmware build config - lists the starter driver `.c` files it compiles; copies the `.uf2` to the top level as `picocalc-space-game-RP2040.uf2` / `-RP2350.uf2`. |
-| `desktop/`                  | Desktop (SDL2) build for Windows and Linux: its own `CMakeLists.txt` plus a small shim (`shim_*.c`, `pico/`, `hardware/`) that re-implements the starter driver API on SDL2, and `shim_screenshot.c`, the Windows stand-in for `F5`. Output `picocalc-space-game-Windows.exe`. |
+| `CMakeLists.txt`            | Firmware build config - lists the starter driver `.c` files it compiles; copies the `.uf2` to the top level as `space-game-RP2040.uf2` / `-RP2350.uf2`. |
+| `desktop/`                  | Desktop (SDL2) build for Windows and Linux: its own `CMakeLists.txt` plus a small shim (`shim_*.c`, `pico/`, `hardware/`) that re-implements the starter driver API on SDL2, and `shim_screenshot.c`, the Windows stand-in for `F5`. Output `space-game-Windows.exe`. |
 | `pico_sdk_import.cmake`     | Standard Pico SDK bootstrap.                        |
 | `picocalc-text-starter-main/` | Vendored copy of picocalc-text-starter (Blair Leduc). Read-only; only `drivers/lcd.c`, `drivers/southbridge.c`, `drivers/font-8x10.c` and `drivers/audio.c` (+ `audio.pio`) are built - plus `drivers/sdcard.c` / `drivers/fat32.c`, used only by the PicoCalc `F5` screenshot. Two small local changes are in it: `drivers/fat32.c` (`get_next_free_cluster()` now advances its search hint, so a long sequential SD write does not look hung) and one line in `drivers/audio.pio` (upper tone limit raised from 2000 Hz to 2115 Hz). |
 | `CHANGELOG.md`              | Notable changes.                                    |

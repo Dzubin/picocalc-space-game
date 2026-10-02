@@ -331,6 +331,27 @@
 #define GO_MSG_ROW     (GO_TXT_ROW + 2)
 #define QUIT_TXT_COL   9       /* Q-quit confirmation, two centred lines    */
 #define QUIT_TXT_ROW   13
+
+/* Start screen: the "or ESC / Q to exit" hint under "Press 0-3", and the
+ * message shown while leaving for the PicoCalc UF2 Loader. */
+#define SPLASH_EXIT_COL  4
+#define SPLASH_EXIT_ROW  26
+#define LOADER_MSG_COL   4
+#define LOADER_MSG_ROW   28
+
+/* Leaving for the PicoCalc UF2 Loader (pelrun/uf2loader).  The loader has no
+ * call for an app to use, but its own menu hands commands to its start-up code
+ * through the chip's watchdog scratch registers, which survive a watchdog
+ * reboot: scratch 0 holds a magic number, 1 the boot mode, 2 an argument.
+ * Asking for boot mode "SD" and then rebooting makes the loader show its menu
+ * again.  With no loader installed the program just restarts. */
+#define LOADER_COMMAND_MAGIC      0xE98CC638u /* PICOCALC_BL_MAGIC in the loader's proginfo.h */
+#define LOADER_BOOT_MODE_SD       1           /* BOOT_SD: load the menu from the SD card */
+#define LOADER_SCRATCH_MAGIC      0
+#define LOADER_SCRATCH_MODE       1
+#define LOADER_SCRATCH_ARGUMENT   2
+#define LOADER_EXIT_MSG_MS        300         /* how long "BACK TO THE LOADER..." shows */
+#define LOADER_REBOOT_DELAY_MS    10          /* the reboot happens this long after it is asked for */
 #define AUTO_TXT_COL    4       /* the one AUTOPILOT / MANUAL banner, two    */
 #define AUTO_TXT_ROW    2       /* ... lines near the top of the box         */
 
@@ -550,6 +571,7 @@ void gauge_draw(int y, int txt_row, uint16_t fill_col,
                 const char *label, int value, int maxv, bool as_pct);
 
 void go_bootsel(void);
+void exit_to_loader(void);
 uint8_t wait_key(void);
 void big_text(int x, int y, int scale, uint16_t col, const char *s);
 void draw_key_legend(void);

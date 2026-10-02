@@ -77,12 +77,13 @@ target_link_libraries(picocalc-space-game
     hardware_gpio
     hardware_i2c
     hardware_spi
+    hardware_watchdog   # watchdog_reboot(): leaving for the UF2 Loader
     hardware_pio
     hardware_clocks
 )
 
-# The chip is part of every output file name (picocalc-space-game-RP2040.uf2 /
-# picocalc-space-game-RP2350.uf2, and the matching .elf/.bin/.hex), so a downloaded file
+# The chip is part of every output file name (space-game-RP2040.uf2 /
+# space-game-RP2350.uf2, and the matching .elf/.bin/.hex), so a downloaded file
 # always says which board it was built for.
 if(PICO_PLATFORM MATCHES "^rp2040")
     set(CHIP_NAME RP2040)
@@ -91,7 +92,7 @@ elseif(PICO_PLATFORM MATCHES "^rp2350")
 else()
     set(CHIP_NAME ${PICO_PLATFORM})
 endif()
-set_target_properties(picocalc-space-game PROPERTIES OUTPUT_NAME picocalc-space-game-${CHIP_NAME})
+set_target_properties(picocalc-space-game PROPERTIES OUTPUT_NAME space-game-${CHIP_NAME})
 
 pico_add_extra_outputs(picocalc-space-game)
 
@@ -100,6 +101,6 @@ pico_add_extra_outputs(picocalc-space-game)
 add_custom_command(TARGET picocalc-space-game POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
             $<TARGET_FILE_DIR:picocalc-space-game>/$<TARGET_FILE_BASE_NAME:picocalc-space-game>.uf2
-            /
+            ${CMAKE_CURRENT_LIST_DIR}/
 )
 

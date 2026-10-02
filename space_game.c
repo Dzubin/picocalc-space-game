@@ -23,6 +23,7 @@
 
 #include "pico/stdlib.h"
 #include "pico/bootrom.h"
+#include "hardware/watchdog.h"    /* watchdog_hw, watchdog_reboot() - exit to the UF2 Loader */
 
 #include "drivers/lcd.h"          /* lcd_init(), lcd_solid_rectangle(), RGB()   */
 #include "drivers/southbridge.h"  /* sb_init(), sb_read_keyboard()              */
@@ -2625,6 +2626,27 @@ void go_bootsel(void)
     rom_reset_usb_boot(0, 0);
 }
 
+/* Leave the program for the PicoCalc UF2 Loader's menu: show a short message,
+ * ask the loader for its menu (see LOADER_COMMAND_MAGIC in space_game.h) and
+ * reboot with the watchdog.  If the game was flashed straight to the chip with
+ * no loader, nothing reads the request and it simply restarts.  On the desktop
+ * build the watchdog stand-in just closes the program. */
+void exit_to_loader(void)
+{
+    audio_stop();
+    lcd_solid_rectangle(COL_SPACE, 0, LOADER_MSG_ROW * GLYPH_HEIGHT, WIDTH, GLYPH_HEIGHT);
+    lcd_putstr(LOADER_MSG_COL, LOADER_MSG_ROW, "BACK TO THE LOADER...");
+    sleep_ms(LOADER_EXIT_MSG_MS);
+
+    watchdog_hw->scratch[LOADER_SCRATCH_MODE] = LOADER_BOOT_MODE_SD;
+    watchdog_hw->scratch[LOADER_SCRATCH_ARGUMENT] = 0;
+    watchdog_hw->scratch[LOADER_SCRATCH_MAGIC] = LOADER_COMMAND_MAGIC;
+    watchdog_reboot(0, 0, LOADER_REBOOT_DELAY_MS);
+
+    for (;;)
+        tight_loop_contents();      /* the reboot comes in a few milliseconds */
+}
+
 /* =========================================================================
  *  Start screen (title + difficulty) and controls screen
  * ===================================================================== */
@@ -2689,7 +2711,8 @@ uint8_t wait_key(void)
 /* The start screen: big wrapped title + author, then the four difficulty
  * choices (one line each) right below.  Waits for 0..3 and returns the level.
  * On the very first showing (program startup) it plays the same happy jingle
- * as the win screen.  ~ reboots to BOOTSEL (via wait_key); ESC does nothing here. */
+ * as the win screen.  ~ reboots to BOOTSEL (via wait_key); ESC or Q leave for
+ * the UF2 Loader menu. */
 int splash_screen(void)
 {
     lcd_clear_screen();
@@ -2704,6 +2727,7 @@ int splash_screen(void)
     lcd_putstr(4, 21, "2   Regular Aliens");
     lcd_putstr(4, 22, "3   Hard Aliens");
     lcd_putstr(4, 24, "Press 0-3");
+    lcd_putstr(SPLASH_EXIT_COL, SPLASH_EXIT_ROW, "or ESC / Q to exit");
 
     static bool startup_song_played = false;
     if (!startup_song_played)          /* the win jingle, once, at program startup */
@@ -2717,6 +2741,8 @@ int splash_screen(void)
         uint8_t code = wait_key();
         if (code >= '0' && code <= '3')
             return code - '0';
+        if (code == KEY_ESC || code == 'q' || code == 'Q')
+            exit_to_loader();               /* does not return */
     }
 }
 
