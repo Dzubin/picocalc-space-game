@@ -7,6 +7,19 @@ and the string shown on the splash screen (`VERSION_STR` in `space_game.h`).
 
 ## [Unreleased]
 
+- Updated the vendored `picocalc-text-starter` to Blair Leduc's code of 2026-10-18 (commit
+  `85a002e`) and moved to Pico SDK 2.3.1. The search-hint, deleted-entry and busy-card fixes this
+  copy carried are in his code now; four small local fixes remain (README, Third-party). The audio
+  driver in it now sounds 20 to 20000 Hz, so the local change that raised its top limit to 2115 Hz
+  is gone.
+- Vendored starter: `fat32.c` `fat32_write()` no longer leaks a cluster each time a write starts on a
+  cluster boundary. The program itself is unchanged; not rebuilt.
+
+- Vendored starter: `fat32.c` skips deleted directory entries before long-name parts (an
+  out-of-bounds stack write) and `sdcard.c` waits for a busy card by the clock and before
+  every command (failed reads and writes on a card that was still programming). The
+  program itself is unchanged; not rebuilt.
+
 ## [V1.00B] - 2026-10-02
 
 ### Added
